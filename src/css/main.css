@@ -1,9 +1,18 @@
+html, body {
+  height: 100%;
+}
+
 body {
   overflow: hidden;
 }
 
 canvas#board {
   z-index: 1;
+}
+
+canvas[resize] {
+  width: 100%;
+  height: 100%;
 }
 
 div#top_container {
@@ -27,6 +36,7 @@ div#event_overlay {
   left: 0;
   height: 100%;
   width: 100%;
+  cursor: default;
 }
 
 div.menu {
