@@ -1,4 +1,4 @@
-import * as wasm from "boardico-wasm";
+//import * as wasm from "boardico-wasm";
 import * as canvas from './canvas';
 
 const $ = require('jquery');
@@ -9,63 +9,143 @@ let offset_x = 0;
 let offset_y = 0;
 
 let scale = 0;
-let position = null;
+let deltaX = 0;
+let deltaY = 0;
+let pan_pointer_id = null;
+let pointers = [];
+
+let pinching = false;
+let panning = false;
 
 export function init() {
   //attach the events
-  $('#top_menu').html(wasm.greet());
+  $('#top_menu').html('hello boardico');
   let overlay = $('#event_overlay');
   let hammer = new Hammer(overlay[0]);
 
   hammer.get('pan').set({ direction: Hammer.DIRECTION_ALL, threshold: 5 });
   let pinch = new Hammer.Pinch({
+    event: 'pinch',
     pointers: 2
   });
+
+  // PAN RECOGNIZER
+  var pan = new Hammer.Pan({
+    event: 'pan',
+    pointers: 0
+  });
+
+  pinch.recognizeWith([pan]);
+  pan.recognizeWith([pinch]);
   hammer.add(pinch);
+  hammer.add(pan);
+
+  hammer.on('pinchend pinchstart pinchcancel panend panstart pancancel tap press pressend rotate swipe', function(e) {
+    let str = e.type;
+    // if (e.additionalEvent) {
+    //   str += ' - ' + e.additionalEvent;
+    // }
+    str += ' - ' + e.isFinal;
+    $('#event_log').prepend('<div class="event_line">' + str + '</div>');
+  });
+
+  hammer.on("hammer.input", function(ev) {
+    if (ev.isFinal) {
+      // All events have stopped. Clean up.
+      $('#event_log').prepend('<div class="event_line">final</div>');
+
+      if (rect) {
+        canvas.moveToClosestSquare(rect.obj);
+        canvas.clearMovementSquares();
+      }
+      rect = null;
+      deltaX = null;
+      deltaY = null;
+      pan_pointer_id = null;
+
+      scale = null;
+
+      pinching = false;
+      panning = false;
+    }
+ });
+
 
   hammer.on('pinchstart', function(e) {
-    scale = canvas.getCurrentScale();
+    scale = 1;
+    pinching = true;
+
     canvas.startPinch();
   }).on('pinch', function(e) {
-    if (e.type != 'pinchstart') {
-      $('#top_menu').html(e.scale);
-      canvas.scaleViewPinch(scale * e.scale, true);
+    if (!e.isFinal) {
+      let deltaS = e.scale - scale;
+      $('#top_menu').html(deltaS);
+      scale = e.scale;
+      canvas.scaleView(deltaS, e.center.x, e.center.y);
     }
   }).on('pinchend', function() {
-    canvas.endPinch();
-  }).on('panstart panend pan', function(e) {
-    if ('panstart' == e.type) {
-      if (rect == null) {
-        let x = e.center.x - e.deltaX;
-        let y = e.center.y - e.deltaY;
-        rect = canvas.checkCollision(x, y);
-        if (rect) {
-          offset_x = rect.point.x - x;
-          offset_y = rect.point.y - y;
-        } else {
 
-          position = canvas.getGroupPosition();
-        }
-      } else {
-      }
-    } else if ('panend' == e.type) {
+    pinching = false;
+    canvas.endPinch();
+  }).on('panstart', function(e) {
+    console.log('Pan startin');
+    if (rect && (pan_pointer_id != e.pointers[0].pointerId && pan_pointer_id != e.pointers[0].identifier)) {
+      canvas.moveToClosestSquare(rect.obj);
+      canvas.clearMovementSquares();
       rect = null;
-      position = null;
-    } else {
-      if (rect != null) {
-        let x = e.center.x + offset_x;
-        let y = e.center.y + offset_y;
-        canvas.moveRect(rect.obj, x, y);
-      } else if (position != null) {
-        let x = e.center.x;
-        let y = e.center.y;
-        console.log(e);
-        $('#top_menu').html(e.distance);
-        canvas.moveGroup(position, e.deltaX, e.deltaY);
+      deltaX = null;
+      deltaY = null;
+      pan_pointer_id = null;
+      panning = true;
+    }
+
+    if (rect == null && !panning) {
+      let x = e.pointers[0].clientX - e.deltaX;
+      let y = e.pointers[0].clientY - e.deltaY;
+
+      rect = canvas.checkCollision(x, y);
+      if (rect) {
+        offset_x = rect.point.x - x;
+        offset_y = rect.point.y - y;
+        if (e.pointers[0].pointerId) {
+          pan_pointer_id = e.pointers[0].pointerId;
+        } else {
+          pan_pointer_id = e.pointers[0].identifier;
+        }
+        pointers = e.pointers;
       }
     }
+
+    if (panning || rect == null) {
+      deltaX = e.deltaX;
+      deltaY = e.deltaY;
+      panning = true;
+    }
+  }).on('pan', function(e) {
+    if (rect != null) {
+      if (pan_pointer_id == e.pointers[0].pointerId || pan_pointer_id == e.pointers[0].identifier) {
+        let x = e.pointers[0].clientX + offset_x;
+        let y = e.pointers[0].clientY + offset_y;
+        canvas.moveRect(rect.obj, x, y);
+      }
+    } else if (deltaX != null) {
+      let dX = e.deltaX - deltaX;
+      let dY = e.deltaY - deltaY;
+      deltaX = e.deltaX;
+      deltaY = e.deltaY;
+      $('#top_menu').html(e.distance);
+      if (!pinching) {
+        canvas.moveGroup(dX, dY);
+      }
+    }
+  }).on('panend', function(e) {
+
   }).on('tap', function(e) {
-    console.log(canvas.checkCollision(e.center.x, e.center.y) != null);
+    canvas.clearMovementSquares();
+    let rect = canvas.checkCollision(e.center.x, e.center.y);
+    if (rect) {
+      canvas.centerRect(rect.obj);
+    }
     $('#top_menu').html("tap");
   })
 
@@ -74,14 +154,10 @@ export function init() {
     e.stopImmediatePropagation();
     if (e.ctrlKey) {
       let scalar = (e.originalEvent.deltaY * -1 / 200);
-      canvas.scaleViewScroll(scalar, false);
+      canvas.scaleView(scalar, e.clientX, e.clientY);
       $('#top_menu').html("pinch (wheel)");
     } else {
       $('#top_menu').html("pan (wheel)");
     }
   });
-
-  window.addEventListener('gesturestart', e => e.preventDefault());
-  window.addEventListener('gesturechange', e => e.preventDefault());
-  window.addEventListener('gestureend', e => e.preventDefault());
 };
