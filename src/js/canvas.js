@@ -228,6 +228,10 @@ export function checkCollision(x, y) {
   return null;
 }
 
+export function showMoveRadius(num) {
+
+}
+
 export function moveRect(obj, x, y) {
   let point = getNormalizedPoint(x, y);
   let width = obj.bounds.width/2;
