@@ -21,6 +21,8 @@ let board_height = 20;
 
 let box_size = 50;
 
+let center_target = null;
+
 let move_boxes = [];
 
 let rects = [
@@ -62,11 +64,11 @@ export function init() {
 
   drawBoard();
   drawRects();
-  //centerBoard();
+  centerBoard();
 
   view.draw();
   view.onFrame = function() {
-    if ($.now() > scale_timestamp && !pinching) {
+    if (scale_timestamp && $.now() > scale_timestamp && !pinching) {
       let scaling = scale_group.scaling;
       if (scaling.x - max_scale > 0.0001) {
         let scalar = (max_scale / scaling.x) - 1;
@@ -76,6 +78,16 @@ export function init() {
         let scalar = (min_scale / scaling.x) - 1;
 
         scaleView(scalar / 10, scale_cx, scale_cy, true);
+      }
+    }
+
+    if (center_target) {
+      let distance_x = center_target.x - (scale_group.bounds.center.x);
+      let distance_y = center_target.y - (scale_group.bounds.center.y);
+      if (distance_x < 0.01 && distance_y < 0.01 && distance_x > 0.01 && distance_y > 0.01) {
+        center_target = null;
+      } else {
+        moveGroup(distance_x/15, distance_y/15);
       }
     }
   };
@@ -90,23 +102,20 @@ function resizeCanvas() {
 }
 
 function centerBoard() {
-  console.log(scale_group.bounds.width);
-  console.log(view.bounds.width);
-  //scale_group.position = view.center;
   scale_group.position = view.center;
-  console.log(scale_group.position);
 }
 
 export function centerRect(rect) {
   let center = rect.bounds.center;
+  let scale = scale_group.scaling.x
 
-  let offset_x = (scale_group.bounds.width / 2) - center.x;
-  let view_x = view.center.x + offset_x;
+  let offset_x = ((scale_group.bounds.width / scale) / 2) - center.x;
+  let view_x = view.center.x + offset_x * scale;
 
-  let offset_y = (scale_group.bounds.height / 2) - center.y;
-  let view_y = view.center.y + offset_y;
+  let offset_y = ((scale_group.bounds.height / scale) / 2) - center.y;
+  let view_y = view.center.y + offset_y * scale;
 
-  scale_group.setPosition(new Point(view_x, view_y));
+  center_target = new Point(view_x, view_y);
 }
 
 function drawBoard() {
@@ -196,6 +205,11 @@ function checkForMoveSquare(square) {
     return false;
   }
   return true;
+}
+
+export function stopAnimation() {
+  center_target = null;
+  scale_timestamp = null;
 }
 
 export function checkCollision(x, y) {
@@ -342,7 +356,6 @@ export function moveGroup(x, y) {
   }
 
   scale_group.position = point;
-  console.log(point);
 }
 
 export function getGroupPosition() {

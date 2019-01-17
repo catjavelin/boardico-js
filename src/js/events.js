@@ -72,6 +72,7 @@ export function init() {
 
 
   hammer.on('pinchstart', function(e) {
+    canvas.stopAnimation();
     scale = 1;
     pinching = true;
 
@@ -88,7 +89,7 @@ export function init() {
     pinching = false;
     canvas.endPinch();
   }).on('panstart', function(e) {
-    console.log('Pan startin');
+    canvas.stopAnimation();
     if (rect && (pan_pointer_id != e.pointers[0].pointerId && pan_pointer_id != e.pointers[0].identifier)) {
       canvas.moveToClosestSquare(rect.obj);
       canvas.clearMovementSquares();
@@ -113,6 +114,7 @@ export function init() {
           pan_pointer_id = e.pointers[0].identifier;
         }
         pointers = e.pointers;
+        canvas.showMoveRadius(2);
       }
     }
 
@@ -150,6 +152,7 @@ export function init() {
   })
 
   overlay.on('mousewheel', function(e) {
+    canvas.stopAnimation();
     e.preventDefault();
     e.stopImmediatePropagation();
     if (e.ctrlKey) {
